@@ -262,6 +262,8 @@ export default function CopenhagenFlow() {
   );
   const [elapsedMs, setElapsedMs] = useState(0);
   const lastFrame = useRef<number | null>(null);
+  const methodologyDialog = useRef<HTMLDialogElement>(null);
+  const resumeAfterMethodology = useRef(false);
   const [initialViewState] = useState(() => ({
     ...VIEW_STATE,
     zoom: window.innerWidth <= 720 ? 10.25 : VIEW_STATE.zoom,
@@ -484,6 +486,18 @@ export default function CopenhagenFlow() {
     setElapsedMs(0);
     setPlaying(true);
   }, []);
+  const openMethodology = useCallback(() => {
+    resumeAfterMethodology.current = playing;
+    setPlaying(false);
+    methodologyDialog.current?.showModal();
+  }, [playing]);
+  const closeMethodology = useCallback(() => {
+    methodologyDialog.current?.close();
+  }, []);
+  const restorePlayback = useCallback(() => {
+    if (resumeAfterMethodology.current) setPlaying(true);
+    resumeAfterMethodology.current = false;
+  }, []);
 
   if (loadError) {
     return (
@@ -566,8 +580,177 @@ export default function CopenhagenFlow() {
       </section>
 
       <footer className="source-note">
-        Count-constrained journeys · modeled, not tracked · municipal data 2014–25
+        <span className="source-note__truth">Count-constrained · modeled, not tracked</span>
+        <button
+          className="methodology-trigger"
+          type="button"
+          onClick={openMethodology}
+          disabled={!flowData}
+        >
+          About the data &amp; model <span aria-hidden="true">→</span>
+        </button>
       </footer>
+
+      <dialog
+        className="methodology"
+        ref={methodologyDialog}
+        aria-labelledby="methodology-title"
+        aria-describedby="methodology-intro"
+        onClose={restorePlayback}
+        onClick={(event) => {
+          if (event.target === event.currentTarget) closeMethodology();
+        }}
+      >
+        <div className="methodology__panel">
+          <header className="methodology__header">
+            <div>
+              <p>Data &amp; methodology</p>
+              <h2 id="methodology-title">What you are seeing</h2>
+            </div>
+            <button
+              className="methodology__close"
+              type="button"
+              onClick={closeMethodology}
+              autoFocus
+            >
+              Close
+            </button>
+          </header>
+
+          <div className="methodology__scroll">
+            <p className="methodology__intro" id="methodology-intro">
+              This is a count-constrained synthetic simulation, not a recording of
+              individual cyclists. Public observations determine when and where the city
+              appears busiest; the moving journeys are generated on Copenhagen&apos;s official
+              bicycle network.
+            </p>
+
+            {flowData ? (
+              <dl className="methodology__stats">
+                <div>
+                  <dt>Recent count locations</dt>
+                  <dd>{flowData.metadata.recentCountLocations.toLocaleString("en")}</dd>
+                </div>
+                <div>
+                  <dt>Observed 07:00–19:00 crossings</dt>
+                  <dd>{flowData.metadata.observedDaytimeCrossings.toLocaleString("en")}</dd>
+                </div>
+                <div>
+                  <dt>Count-equivalent journeys</dt>
+                  <dd>{flowData.metadata.modeledDailyJourneys.toLocaleString("en")}</dd>
+                </div>
+                <div>
+                  <dt>Connected path templates</dt>
+                  <dd>{flowData.metadata.journeyTemplateCount.toLocaleString("en")}</dd>
+                </div>
+              </dl>
+            ) : null}
+
+            <section className="methodology__section">
+              <p className="methodology__kicker">01 · Observed</p>
+              <h3>What comes directly from public data</h3>
+              <p>
+                The map uses 3,014 existing bicycle-infrastructure lines published by the
+                City of Copenhagen. Relative route demand comes from the latest available
+                2023–25 municipal bicycle traffic values at 321 locations.
+              </p>
+              <p>
+                The daytime rhythm is anchored to 12,127 aggregate bicycle crossings counted
+                at four Amager Strand locations from 07:00–19:00 on Sunday, 22 June 2025. The
+                broader 2014 fixed-counter archive supplies the hours not observed in 2025.
+              </p>
+            </section>
+
+            <section className="methodology__section">
+              <p className="methodology__kicker">02 · Modeled</p>
+              <h3>How the journeys are generated</h3>
+              <ol className="methodology__steps">
+                <li>Nearby recent traffic counts weight the official network.</li>
+                <li>
+                  Network endpoints within 32 metres are joined into 720 continuous path
+                  templates.
+                </li>
+                <li>
+                  Integer hourly departures preserve exactly 17,681 count-equivalent journeys,
+                  including exactly 12,127 from 07:00–19:00.
+                </li>
+                <li>
+                  Every synthetic journey receives a stable ID, start time, direction, path,
+                  and a cycling speed between 13.7 and 18.7 km/h.
+                </li>
+              </ol>
+            </section>
+
+            <section className="methodology__section methodology__limits">
+              <p className="methodology__kicker">03 · Limits</p>
+              <h3>What the visualization cannot claim</h3>
+              <p>
+                Counter data does not identify unique bicycles, origins, destinations, or GPS
+                trajectories. A person passing several counters may be counted several times.
+                These are therefore count-equivalent modeled journeys—not reconstructed real
+                trips or a citywide count of unique cyclists.
+              </p>
+              <p>
+                The recent Sunday sample is concentrated around Amager Strand and coincided
+                with Copenhagen Sprint, so the result should be read as a plausible busy summer
+                Sunday rather than a statistically typical Sunday.
+              </p>
+            </section>
+
+            <section className="methodology__section">
+              <p className="methodology__kicker">Sources</p>
+              <h3>Public datasets</h3>
+              <ul className="methodology__sources">
+                <li>
+                  <a
+                    href="https://www.opendata.dk/city-of-copenhagen/cykeldata"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Copenhagen Cykeldata
+                  </a>
+                  <span>Official bicycle-infrastructure geometry · CC BY 4.0</span>
+                </li>
+                <li>
+                  <a
+                    href="https://www.opendata.dk/city-of-copenhagen/trafiktal"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Copenhagen Trafiktal
+                  </a>
+                  <span>Recent spatial counts and June 2025 reports · CC0</span>
+                </li>
+                <li>
+                  <a
+                    href="https://www.opendata.dk/city-of-copenhagen/faste-cykeltaellinger"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Fixed bicycle counts
+                  </a>
+                  <span>Summer-Sunday hourly shape for unobserved hours · CC BY 4.0</span>
+                </li>
+                <li>
+                  <a href="https://openfreemap.org" target="_blank" rel="noreferrer">
+                    OpenFreeMap / OpenStreetMap
+                  </a>
+                  <span>Bundled shoreline and water context · ODbL</span>
+                </li>
+              </ul>
+            </section>
+
+            <a
+              className="methodology__repo"
+              href="https://github.com/toddsherman/copenhagen-bike-flow#what-the-visualization-represents"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Read the reproducible method and source code on GitHub →
+            </a>
+          </div>
+        </div>
+      </dialog>
       <div className="map-attribution">
         <a href="https://openfreemap.org">OpenFreeMap</a>
         <span> · </span>
