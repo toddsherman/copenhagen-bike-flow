@@ -21,7 +21,14 @@ type FlowRoute = {
   category: "Cykelsti" | "Cykelmulighed" | "Grøn" | "Supercykelsti";
 };
 
-type FlowData = {
+type PackedRoute = [
+  categoryIndex: number,
+  lengthMeters: number,
+  weight: number,
+  coordinateDeltas: number[],
+];
+
+type FlowDataFile = {
   metadata: {
     generatedAt: string;
     routeCount: number;
@@ -29,8 +36,10 @@ type FlowData = {
     modelDescription: string;
   };
   hourlyProfile: number[];
-  routes: FlowRoute[];
+  routes: PackedRoute[];
 };
+
+type FlowData = Omit<FlowDataFile, "routes"> & { routes: FlowRoute[] };
 
 type HydratedRoute = FlowRoute & {
   cumulative: number[];
@@ -67,6 +76,33 @@ const NETWORK_COLORS: Record<FlowRoute["category"], [number, number, number, num
   Grøn: [30, 108, 83, 92],
   Supercykelsti: [190, 57, 23, 150],
 };
+
+const PACKED_CATEGORIES: FlowRoute["category"][] = [
+  "Cykelmulighed",
+  "Cykelsti",
+  "Grøn",
+  "Supercykelsti",
+];
+
+function unpackRoutes(routes: PackedRoute[]): FlowRoute[] {
+  return routes.map(([categoryIndex, lengthMeters, weight, deltas], routeIndex) => {
+    const path: Coordinate[] = [];
+    let longitude = 0;
+    let latitude = 0;
+    for (let index = 0; index < deltas.length; index += 2) {
+      longitude += deltas[index];
+      latitude += deltas[index + 1];
+      path.push([longitude / 1_000_000, latitude / 1_000_000]);
+    }
+    return {
+      id: String(routeIndex),
+      category: PACKED_CATEGORIES[categoryIndex],
+      lengthMeters,
+      weight,
+      path,
+    };
+  });
+}
 
 function distanceMeters(a: Coordinate, b: Coordinate) {
   const latitude = ((a[1] + b[1]) / 2) * (Math.PI / 180);
@@ -175,9 +211,9 @@ export default function CopenhagenFlow() {
     fetch(`${BASE_PATH}/data/copenhagen-flow.json`, { signal: controller.signal })
       .then((response) => {
         if (!response.ok) throw new Error(`Data request failed: ${response.status}`);
-        return response.json() as Promise<FlowData>;
+        return response.json() as Promise<FlowDataFile>;
       })
-      .then(setFlowData)
+      .then((data) => setFlowData({ ...data, routes: unpackRoutes(data.routes) }))
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === "AbortError") return;
         setLoadError(true);

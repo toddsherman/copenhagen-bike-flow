@@ -30,6 +30,13 @@ const CATEGORY_FACTOR = {
   Supercykelsti: 1.28,
 };
 
+const CATEGORY_INDEX = {
+  Cykelmulighed: 0,
+  Cykelsti: 1,
+  Grøn: 2,
+  Supercykelsti: 3,
+};
+
 function clamp(value, low, high) {
   return Math.min(high, Math.max(low, value));
 }
@@ -64,6 +71,20 @@ function cleanPath(coordinates) {
 function pathCenter(coordinates) {
   const middle = coordinates[Math.floor(coordinates.length / 2)];
   return middle;
+}
+
+function packPath(coordinates) {
+  const packed = [];
+  let previousLongitude = 0;
+  let previousLatitude = 0;
+  for (const coordinate of coordinates) {
+    const longitude = Math.round(coordinate[0] * 1_000_000);
+    const latitude = Math.round(coordinate[1] * 1_000_000);
+    packed.push(longitude - previousLongitude, latitude - previousLatitude);
+    previousLongitude = longitude;
+    previousLatitude = latitude;
+  }
+  return packed;
 }
 
 function buildHourlyProfile() {
@@ -193,7 +214,15 @@ async function main() {
       },
     },
     hourlyProfile: buildHourlyProfile(),
-    routes,
+    // Tuple schema: [category index, length in meters, relative weight,
+    // delta-encoded coordinates in millionths of a degree]. This keeps the
+    // public artifact small without hiding or changing the model.
+    routes: routes.map((route) => [
+      CATEGORY_INDEX[route.category],
+      route.lengthMeters,
+      route.weight,
+      packPath(route.path),
+    ]),
   };
 
   const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
