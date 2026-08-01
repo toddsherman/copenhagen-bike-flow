@@ -36,4 +36,4 @@ The site displays required basemap attribution. Any reuse of the generated data 
 
 ## Technology
 
-Next.js and React provide the application shell. deck.gl renders the static land/water map, bicycle network, and animated traffic marks in one WebGL canvas. Keeping the coastline in the static export makes the map reliable and removes a runtime tile dependency.
+Next.js and React provide the application shell. deck.gl renders the static land/water map, cool-gray bicycle network, and animated traffic marks in one WebGL canvas. The traffic layer uses pale bicycle heads with short coral trails, kept deliberately distinct from the routes beneath them. A midnight-to-midnight bar shows the modeled time and the late-June transition through sunrise, daylight, sunset, and darkness. Keeping the coastline in the static export makes the map reliable and removes a runtime tile dependency.

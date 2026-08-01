@@ -7,6 +7,7 @@ import { PathLayer, PolygonLayer, ScatterplotLayer } from "@deck.gl/layers";
 const BASE_PATH = "/Copenhagen";
 const LOOP_MS = 60_000;
 const DAY_SECONDS = 86_400;
+const TRAIL_SEGMENTS = 4;
 
 type Coordinate = [number, number];
 
@@ -57,6 +58,12 @@ type RenderParticle = {
   size: number;
 };
 
+type RenderTrail = {
+  path: [Coordinate, Coordinate];
+  alpha: number;
+  width: number;
+};
+
 type WaterPolygon = {
   geometry: {
     type: "Polygon";
@@ -80,10 +87,10 @@ const VIEW_STATE = {
 };
 
 const NETWORK_COLORS: Record<FlowRoute["category"], [number, number, number, number]> = {
-  Cykelsti: [8, 56, 72, 108],
-  Cykelmulighed: [10, 77, 87, 72],
-  Grøn: [30, 108, 83, 92],
-  Supercykelsti: [190, 57, 23, 150],
+  Cykelsti: [76, 103, 111, 112],
+  Cykelmulighed: [55, 79, 87, 78],
+  Grøn: [52, 105, 92, 98],
+  Supercykelsti: [111, 129, 132, 142],
 };
 
 const PACKED_CATEGORIES: FlowRoute["category"][] = [
@@ -301,23 +308,58 @@ export default function CopenhagenFlow() {
     : 0;
   const daylight = daylightAt(simulatedSeconds);
 
-  const particles = useMemo<RenderParticle[]>(() => {
-    if (!flowData) return [];
+  const { particles, trails } = useMemo<{
+    particles: RenderParticle[];
+    trails: RenderTrail[];
+  }>(() => {
+    if (!flowData) return { particles: [], trails: [] };
     const elapsedSeconds = elapsedMs / 1000;
-    const visibleThreshold = 0.05 + activity * 0.52;
-    const result: RenderParticle[] = [];
+    const visibleThreshold = 0.025 + activity * 0.22;
+    const particleResult: RenderParticle[] = [];
+    const trailResult: RenderTrail[] = [];
 
     for (const seed of seeds) {
       if (seed.activation > visibleThreshold) continue;
       let progress = (seed.phase + elapsedSeconds * seed.speed) % 1;
       if (seed.reverse) progress = 1 - progress;
-      result.push({
+      const alpha = 0.72 + activity * 0.28;
+      const size = seed.size * (0.92 + seed.route.weight * 0.16);
+      particleResult.push({
         position: interpolatePosition(seed.route, progress),
-        alpha: 0.7 + activity * 0.3,
-        size: seed.size * (0.92 + seed.route.weight * 0.16),
+        alpha,
+        size,
       });
+
+      const direction = seed.reverse ? -1 : 1;
+      const trailSpan = Math.min(
+        0.45,
+        (145 + seed.route.weight * 55) / Math.max(1, seed.route.lengthMeters),
+      );
+      for (let index = 0; index < TRAIL_SEGMENTS; index += 1) {
+        const nearOffset = (index / TRAIL_SEGMENTS) * trailSpan;
+        const farOffset = ((index + 1) / TRAIL_SEGMENTS) * trailSpan;
+        const nearProgress = progress - direction * nearOffset;
+        const farProgress = progress - direction * farOffset;
+        if (
+          nearProgress < 0 ||
+          nearProgress >= 1 ||
+          farProgress < 0 ||
+          farProgress >= 1
+        ) {
+          continue;
+        }
+        const fade = Math.pow(1 - index / TRAIL_SEGMENTS, 1.65);
+        trailResult.push({
+          path: [
+            interpolatePosition(seed.route, farProgress),
+            interpolatePosition(seed.route, nearProgress),
+          ],
+          alpha: alpha * fade,
+          width: Math.max(0.68, size * (0.96 - index * 0.1)),
+        });
+      }
     }
-    return result;
+    return { particles: particleResult, trails: trailResult };
   }, [activity, elapsedMs, flowData, seeds]);
 
   const layers = useMemo(
@@ -326,7 +368,7 @@ export default function CopenhagenFlow() {
         id: "water",
         data: waterPolygons,
         getPolygon: (feature) => feature.geometry.coordinates,
-        getFillColor: [43, 145, 163, 255],
+        getFillColor: [13, 52, 64, 255],
         filled: true,
         stroked: false,
         pickable: false,
@@ -344,23 +386,36 @@ export default function CopenhagenFlow() {
         capRounded: true,
         pickable: false,
       }),
+      new PathLayer<RenderTrail>({
+        id: "bicycle-trails",
+        data: trails,
+        getPath: (trail) => trail.path,
+        getColor: (trail) => [235, 88, 57, Math.round(245 * trail.alpha)],
+        getWidth: (trail) => trail.width,
+        widthUnits: "pixels",
+        widthMinPixels: 0.7,
+        widthMaxPixels: 2.4,
+        capRounded: true,
+        jointRounded: true,
+        pickable: false,
+      }),
       new ScatterplotLayer<RenderParticle>({
         id: "bicycles",
         data: particles,
         getPosition: (particle) => particle.position,
-        getRadius: (particle) => particle.size * 1.35,
+        getRadius: (particle) => particle.size * 0.92,
         radiusUnits: "pixels",
-        radiusMinPixels: 1.25,
-        getFillColor: (particle) => [210, 68, 42, Math.round(238 * particle.alpha)],
+        radiusMinPixels: 0.95,
+        getFillColor: (particle) => [255, 205, 144, Math.round(248 * particle.alpha)],
         stroked: true,
-        getLineColor: (particle) => [248, 235, 205, Math.round(220 * particle.alpha)],
-        getLineWidth: 0.75,
+        getLineColor: (particle) => [235, 88, 57, Math.round(235 * particle.alpha)],
+        getLineWidth: 0.65,
         lineWidthUnits: "pixels",
-        lineWidthMinPixels: 0.6,
+        lineWidthMinPixels: 0.45,
         pickable: false,
       }),
     ],
-    [particles, routes, waterPolygons],
+    [particles, routes, trails, waterPolygons],
   );
 
   const togglePlayback = useCallback(() => setPlaying((value) => !value), []);
@@ -393,7 +448,7 @@ export default function CopenhagenFlow() {
 
       <div
         className="night-wash"
-        style={{ opacity: 0.04 + (1 - daylight) * 0.38 }}
+        style={{ opacity: 0.03 + (1 - daylight) * 0.22 }}
         aria-hidden="true"
       />
       <div className="paper-grain" aria-hidden="true" />
@@ -427,9 +482,21 @@ export default function CopenhagenFlow() {
         </button>
       </section>
 
-      <div className="progress" aria-hidden="true">
-        <span style={{ transform: `scaleX(${elapsedMs / LOOP_MS})` }} />
-      </div>
+      <section className="day-cycle" aria-label="Daylight cycle from midnight to midnight">
+        <div className="day-cycle__labels" aria-hidden="true">
+          <span className="day-cycle__midnight-start">Midnight</span>
+          <span className="day-cycle__sunrise">Sunrise</span>
+          <span className="day-cycle__noon">12 noon</span>
+          <span className="day-cycle__sunset">Sunset</span>
+          <span className="day-cycle__midnight-end">Midnight</span>
+        </div>
+        <div className="day-cycle__bar" aria-hidden="true">
+          <span
+            className="day-cycle__marker"
+            style={{ left: `${(elapsedMs / LOOP_MS) * 100}%` }}
+          />
+        </div>
+      </section>
 
       <footer className="source-note">
         Modeled, not tracked trips · Copenhagen municipal data 2014–25
