@@ -1,4 +1,5 @@
 :root {
+  --tsh-back-height: 36px;
   --navy: #07283b;
   --ink: #0b2028;
   --cream: #f5e4bd;
@@ -35,6 +36,44 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+.tsh-back {
+  position: sticky;
+  z-index: 50;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: var(--tsh-back-height);
+  padding: 0 20px;
+  border-bottom: 1px solid #e6e6e6;
+  background: #fff;
+  color: #8a8a8a;
+  font-family: Georgia, serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  line-height: 1;
+  text-decoration: none;
+  text-transform: uppercase;
+  transition: color 150ms ease;
+}
+
+.tsh-back:hover {
+  color: #000;
+}
+
+.tsh-back:focus-visible {
+  color: #000;
+  outline: 2px solid #000;
+  outline-offset: -3px;
+}
+
+.tsh-back span {
+  font-size: 13px;
+  line-height: 1;
+}
+
 button {
   color: inherit;
   font: inherit;
@@ -45,7 +84,8 @@ button {
 .error-state {
   position: relative;
   width: 100%;
-  min-height: 100svh;
+  height: calc(100svh - var(--tsh-back-height));
+  min-height: 0;
   overflow: hidden;
   background: var(--map-land);
 }
