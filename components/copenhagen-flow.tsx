@@ -531,15 +531,18 @@ export default function CopenhagenFlow() {
       <header className="masthead">
         <p className="eyebrow">One summer Sunday · a modeled day</p>
         <h1>Copenhagen</h1>
-        <p className="dek">Twenty-four hours of bicycle traffic in sixty seconds</p>
+        <p className="dek">
+          <span>Twenty-four hours of bicycle traffic</span>{" "}
+          <span>in sixty seconds</span>
+        </p>
       </header>
 
       <aside className="weather-note" aria-label="Modeled day conditions">
-        <span>Sunday</span>
-        <span>25°C</span>
-        <span>Partly sunny</span>
+        <span className="weather-note__day">Sunday</span>
+        <span className="weather-note__temperature">25°C</span>
+        <span className="weather-note__conditions">Partly sunny</span>
         {flowData ? (
-          <span>
+          <span className="weather-note__journeys">
             {flowData.metadata.modeledDailyJourneys.toLocaleString("en")} count-equivalent
             journeys
           </span>
@@ -580,7 +583,10 @@ export default function CopenhagenFlow() {
       </section>
 
       <footer className="source-note">
-        <span className="source-note__truth">Count-constrained · modeled, not tracked</span>
+        <span className="source-note__truth">
+          <span>Count-constrained simulation</span>
+          <span>Modeled, not tracked</span>
+        </span>
         <button
           className="methodology-trigger"
           type="button"
