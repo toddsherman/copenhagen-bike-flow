@@ -1,6 +1,6 @@
 # Copenhagen Bike Flow
 
-A sixty-second, continuously looping visualization of a modeled summer Sunday of bicycle traffic across Copenhagen. It is designed for `todd.sh/Copenhagen` and runs as a standalone Next.js app on Vercel.
+A sixty-second, continuously looping visualization of a modeled summer Sunday of bicycle traffic across Copenhagen. It is designed for `todd.sh/Copenhagen`. The source stays in this standalone repository; its static Next.js export is published by the existing todd.sh Vercel project.
 
 ## What the visualization represents
 
@@ -22,6 +22,8 @@ npm run dev
 ```
 
 Because the app uses `basePath: "/Copenhagen"`, open [http://localhost:3000/Copenhagen](http://localhost:3000/Copenhagen).
+
+`npm run build` writes the deployable site to `out/`. Copy the contents of that directory to `todd.sh/public/Copenhagen/`; the todd.sh build automatically discovers the directory and serves its `index.html` at `/Copenhagen`.
 
 ## Data sources and licensing
 
