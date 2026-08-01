@@ -2,10 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DeckGL from "@deck.gl/react";
-import { PathLayer, ScatterplotLayer } from "@deck.gl/layers";
-import Map from "react-map-gl/maplibre";
-import * as maplibregl from "maplibre-gl";
-import { POSTER_STYLE } from "@/lib/poster-style";
+import { PathLayer, PolygonLayer, ScatterplotLayer } from "@deck.gl/layers";
 
 const BASE_PATH = "/Copenhagen";
 const LOOP_MS = 60_000;
@@ -58,6 +55,18 @@ type RenderParticle = {
   position: Coordinate;
   alpha: number;
   size: number;
+};
+
+type WaterPolygon = {
+  geometry: {
+    type: "Polygon";
+    coordinates: Coordinate[][];
+  };
+};
+
+type WaterDataFile = {
+  type: "FeatureCollection";
+  features: WaterPolygon[];
 };
 
 const VIEW_STATE = {
@@ -195,6 +204,7 @@ function PlayIcon({ playing }: { playing: boolean }) {
 
 export default function CopenhagenFlow() {
   const [flowData, setFlowData] = useState<FlowData | null>(null);
+  const [waterPolygons, setWaterPolygons] = useState<WaterPolygon[]>([]);
   const [loadError, setLoadError] = useState(false);
   const [playing, setPlaying] = useState(
     () => !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
@@ -208,12 +218,26 @@ export default function CopenhagenFlow() {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch(`${BASE_PATH}/data/copenhagen-flow.json`, { signal: controller.signal })
-      .then((response) => {
-        if (!response.ok) throw new Error(`Data request failed: ${response.status}`);
-        return response.json() as Promise<FlowDataFile>;
+    Promise.all([
+      fetch(`${BASE_PATH}/data/copenhagen-flow.json`, { signal: controller.signal }),
+      fetch(`${BASE_PATH}/data/copenhagen-water.json`, { signal: controller.signal }),
+    ])
+      .then(([flowResponse, waterResponse]) => {
+        if (!flowResponse.ok) {
+          throw new Error(`Traffic data request failed: ${flowResponse.status}`);
+        }
+        if (!waterResponse.ok) {
+          throw new Error(`Map data request failed: ${waterResponse.status}`);
+        }
+        return Promise.all([
+          flowResponse.json() as Promise<FlowDataFile>,
+          waterResponse.json() as Promise<WaterDataFile>,
+        ]);
       })
-      .then((data) => setFlowData({ ...data, routes: unpackRoutes(data.routes) }))
+      .then(([data, water]) => {
+        setFlowData({ ...data, routes: unpackRoutes(data.routes) });
+        setWaterPolygons(water.features);
+      })
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === "AbortError") return;
         setLoadError(true);
@@ -252,8 +276,8 @@ export default function CopenhagenFlow() {
       const count = Math.max(
         1,
         Math.min(
-          9,
-          Math.round((route.lengthMeters / 145) * (0.42 + route.weight * 1.28)),
+          6,
+          Math.round((route.lengthMeters / 175) * (0.34 + route.weight * 0.9)),
         ),
       );
       for (let index = 0; index < count; index += 1) {
@@ -264,7 +288,7 @@ export default function CopenhagenFlow() {
           activation: hashUnit(`${key}:active`),
           speed: 0.045 + hashUnit(`${key}:speed`) * 0.095,
           reverse: hashUnit(`${key}:direction`) > 0.5,
-          size: 1.1 + hashUnit(`${key}:size`) * 1.15,
+          size: 1 + hashUnit(`${key}:size`) * 0.85,
         });
       }
     }
@@ -280,7 +304,7 @@ export default function CopenhagenFlow() {
   const particles = useMemo<RenderParticle[]>(() => {
     if (!flowData) return [];
     const elapsedSeconds = elapsedMs / 1000;
-    const visibleThreshold = 0.09 + activity * 0.91;
+    const visibleThreshold = 0.05 + activity * 0.52;
     const result: RenderParticle[] = [];
 
     for (const seed of seeds) {
@@ -289,8 +313,8 @@ export default function CopenhagenFlow() {
       if (seed.reverse) progress = 1 - progress;
       result.push({
         position: interpolatePosition(seed.route, progress),
-        alpha: 0.52 + activity * 0.48,
-        size: seed.size * (0.9 + seed.route.weight * 0.22),
+        alpha: 0.7 + activity * 0.3,
+        size: seed.size * (0.92 + seed.route.weight * 0.16),
       });
     }
     return result;
@@ -298,6 +322,15 @@ export default function CopenhagenFlow() {
 
   const layers = useMemo(
     () => [
+      new PolygonLayer<WaterPolygon>({
+        id: "water",
+        data: waterPolygons,
+        getPolygon: (feature) => feature.geometry.coordinates,
+        getFillColor: [43, 145, 163, 255],
+        filled: true,
+        stroked: false,
+        pickable: false,
+      }),
       new PathLayer<HydratedRoute>({
         id: "cycle-network",
         data: routes,
@@ -312,38 +345,22 @@ export default function CopenhagenFlow() {
         pickable: false,
       }),
       new ScatterplotLayer<RenderParticle>({
-        id: "bicycle-glow-wide",
+        id: "bicycles",
         data: particles,
         getPosition: (particle) => particle.position,
-        getRadius: (particle) => particle.size * 5.6,
+        getRadius: (particle) => particle.size * 1.35,
         radiusUnits: "pixels",
-        getFillColor: (particle) => [255, 106, 24, Math.round(42 * particle.alpha)],
-        stroked: false,
-        pickable: false,
-      }),
-      new ScatterplotLayer<RenderParticle>({
-        id: "bicycle-glow",
-        data: particles,
-        getPosition: (particle) => particle.position,
-        getRadius: (particle) => particle.size * 2.9,
-        radiusUnits: "pixels",
-        getFillColor: (particle) => [255, 190, 47, Math.round(132 * particle.alpha)],
-        stroked: false,
-        pickable: false,
-      }),
-      new ScatterplotLayer<RenderParticle>({
-        id: "bicycle-core",
-        data: particles,
-        getPosition: (particle) => particle.position,
-        getRadius: (particle) => particle.size,
-        radiusUnits: "pixels",
-        radiusMinPixels: 1,
-        getFillColor: (particle) => [255, 246, 199, Math.round(245 * particle.alpha)],
-        stroked: false,
+        radiusMinPixels: 1.25,
+        getFillColor: (particle) => [210, 68, 42, Math.round(238 * particle.alpha)],
+        stroked: true,
+        getLineColor: (particle) => [248, 235, 205, Math.round(220 * particle.alpha)],
+        getLineWidth: 0.75,
+        lineWidthUnits: "pixels",
+        lineWidthMinPixels: 0.6,
         pickable: false,
       }),
     ],
-    [particles, routes],
+    [particles, routes, waterPolygons],
   );
 
   const togglePlayback = useCallback(() => setPlaying((value) => !value), []);
@@ -366,22 +383,17 @@ export default function CopenhagenFlow() {
 
   return (
     <main className="experience">
-      <DeckGL
-        initialViewState={initialViewState}
-        controller={false}
-        layers={layers}
-      >
-        <Map
-          mapLib={maplibregl}
-          mapStyle={POSTER_STYLE}
-          attributionControl={{ compact: true }}
-          reuseMaps
+      <div className="map-stage">
+        <DeckGL
+          initialViewState={initialViewState}
+          controller={false}
+          layers={layers}
         />
-      </DeckGL>
+      </div>
 
       <div
         className="night-wash"
-        style={{ opacity: 0.08 + (1 - daylight) * 0.58 }}
+        style={{ opacity: 0.04 + (1 - daylight) * 0.38 }}
         aria-hidden="true"
       />
       <div className="paper-grain" aria-hidden="true" />
@@ -422,6 +434,11 @@ export default function CopenhagenFlow() {
       <footer className="source-note">
         Modeled, not tracked trips · Copenhagen municipal data 2014–25
       </footer>
+      <div className="map-attribution">
+        <a href="https://openfreemap.org">OpenFreeMap</a>
+        <span> · </span>
+        <a href="https://www.openstreetmap.org/copyright">© OpenStreetMap</a>
+      </div>
     </main>
   );
 }

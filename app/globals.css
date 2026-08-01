@@ -42,24 +42,39 @@ button {
   width: 100%;
   min-height: 100svh;
   overflow: hidden;
-  background: var(--turquoise);
+  background: #ead9b6;
 }
 
-.maplibregl-map,
-.maplibregl-canvas-container,
-.maplibregl-canvas {
+.map-stage {
+  position: absolute;
+  inset: 0;
+}
+
+.map-stage canvas {
   width: 100%;
   height: 100%;
 }
 
-.maplibregl-ctrl-bottom-right {
-  z-index: 7;
-  opacity: 0.58;
+.map-attribution {
+  position: absolute;
+  z-index: 6;
+  right: 9px;
+  bottom: 8px;
+  padding: 3px 6px;
+  border-radius: 10px;
+  background: rgba(234, 217, 182, 0.72);
+  color: rgba(7, 40, 59, 0.76);
+  font-size: 9px;
 }
 
-.maplibregl-ctrl-attrib {
-  color: var(--ink);
-  font-size: 9px;
+.map-attribution a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.map-attribution a:hover,
+.map-attribution a:focus-visible {
+  text-decoration: underline;
 }
 
 .night-wash,

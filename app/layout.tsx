@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import "maplibre-gl/dist/maplibre-gl.css";
 import "./globals.css";
 
 const title = "Copenhagen Bike Flow — A Summer Sunday in 60 Seconds";

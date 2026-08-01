@@ -7,24 +7,25 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "generate:data": "node scripts/build-data.mjs"
+    "generate:data": "node scripts/build-data.mjs && node scripts/build-water.mjs",
+    "generate:water": "node scripts/build-water.mjs"
   },
   "dependencies": {
     "@deck.gl/core": "9.3.7",
     "@deck.gl/layers": "9.3.7",
     "@deck.gl/react": "9.3.7",
-    "maplibre-gl": "6.1.0",
     "next": "16.2.12",
     "react": "19.2.8",
-    "react-dom": "19.2.8",
-    "react-map-gl": "8.1.2"
+    "react-dom": "19.2.8"
   },
   "devDependencies": {
+    "@mapbox/vector-tile": "3.0.0",
     "@types/node": "^20",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.4",
     "eslint": "9.39.5",
     "eslint-config-next": "16.2.12",
+    "pbf": "5.1.2",
     "typescript": "5.9.3"
   },
   "engines": {

@@ -4,7 +4,7 @@ A sixty-second, continuously looping visualization of a modeled summer Sunday of
 
 ## What the visualization represents
 
-The glowing particles are illustrative flows, not GPS traces or recorded individual trips. The model combines:
+The moving marks are illustrative flows, not GPS traces or recorded individual trips. The model combines:
 
 - Copenhagen's current bicycle-infrastructure network for the paths.
 - The latest available 2023–25 municipal bicycle traffic counts to weight where flows are strongest.
@@ -30,10 +30,10 @@ Because the app uses `basePath: "/Copenhagen"`, open [http://localhost:3000/Cope
 - [Copenhagen Cykeldata](https://www.opendata.dk/city-of-copenhagen/cykeldata) — CC BY 4.0.
 - [Copenhagen Trafiktal](https://www.opendata.dk/city-of-copenhagen/trafiktal) — CC0; the project reads the live municipal WFS rather than the stale portal cache.
 - [Copenhagen fixed bicycle counts](https://www.opendata.dk/city-of-copenhagen/faste-cykeltaellinger) — CC BY 4.0.
-- Basemap tiles from [OpenFreeMap](https://openfreemap.org), derived from [OpenStreetMap](https://www.openstreetmap.org/copyright) data under ODbL.
+- A static Copenhagen water layer extracted from [OpenFreeMap](https://openfreemap.org) vector tiles, derived from [OpenStreetMap](https://www.openstreetmap.org/copyright) data under ODbL.
 
 The site displays required basemap attribution. Any reuse of the generated data should preserve the municipal data attribution above.
 
 ## Technology
 
-Next.js and React provide the application shell. MapLibre renders a custom travel-poster basemap, while deck.gl renders the bicycle network and animated particle layers in WebGL.
+Next.js and React provide the application shell. deck.gl renders the static land/water map, bicycle network, and animated traffic marks in one WebGL canvas. Keeping the coastline in the static export makes the map reliable and removes a runtime tile dependency.
