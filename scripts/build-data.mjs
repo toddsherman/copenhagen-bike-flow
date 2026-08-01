@@ -37,6 +37,11 @@ const CATEGORY_INDEX = {
   Supercykelsti: 3,
 };
 
+const JOURNEY_TEMPLATE_COUNT = 720;
+const CONNECTION_RADIUS_METERS = 32;
+const MIN_JOURNEY_METERS = 900;
+const MAX_JOURNEY_SEGMENTS = 36;
+
 function clamp(value, low, high) {
   return Math.min(high, Math.max(low, value));
 }
@@ -85,6 +90,221 @@ function packPath(coordinates) {
     previousLatitude = latitude;
   }
   return packed;
+}
+
+function hashInteger(value) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function createRandom(seed) {
+  let state = seed >>> 0;
+  return () => {
+    state += 0x6d2b79f5;
+    let value = state;
+    value = Math.imul(value ^ (value >>> 15), value | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+    return ((value ^ (value >>> 14)) >>> 0) / 4_294_967_296;
+  };
+}
+
+function allocateIntegers(values, total) {
+  const valueTotal = values.reduce((sum, value) => sum + value, 0);
+  const allocations = values.map((value) => Math.floor((value / valueTotal) * total));
+  let remainder = total - allocations.reduce((sum, value) => sum + value, 0);
+  const rankedRemainders = values
+    .map((value, index) => ({
+      index,
+      remainder: (value / valueTotal) * total - allocations[index],
+    }))
+    .sort((a, b) => b.remainder - a.remainder || a.index - b.index);
+  for (let index = 0; index < remainder; index += 1) {
+    allocations[rankedRemainders[index].index] += 1;
+  }
+  return allocations;
+}
+
+function buildHourlyJourneyCounts(profile) {
+  const observedDaytimeCrossings = RECENT_SUNDAY_COUNTS.reduce(
+    (sum, value) => sum + value,
+    0,
+  );
+  const daytimeProfile = profile.slice(7, 19);
+  const scale =
+    observedDaytimeCrossings /
+    daytimeProfile.reduce((sum, value) => sum + value, 0);
+  const modeledDailyJourneys = Math.round(
+    profile.reduce((sum, value) => sum + value, 0) * scale,
+  );
+  const hourlyJourneyCounts = Array(24).fill(0);
+  const daytimeCounts = allocateIntegers(daytimeProfile, observedDaytimeCrossings);
+  const nightHours = [...Array(7).keys(), ...Array.from({ length: 5 }, (_, index) => index + 19)];
+  const nightCounts = allocateIntegers(
+    nightHours.map((hour) => profile[hour]),
+    modeledDailyJourneys - observedDaytimeCrossings,
+  );
+  for (let index = 0; index < daytimeCounts.length; index += 1) {
+    hourlyJourneyCounts[index + 7] = daytimeCounts[index];
+  }
+  for (let index = 0; index < nightHours.length; index += 1) {
+    hourlyJourneyCounts[nightHours[index]] = nightCounts[index];
+  }
+  return { hourlyJourneyCounts, modeledDailyJourneys, observedDaytimeCrossings };
+}
+
+function endpointCell(coordinate) {
+  return [
+    Math.floor(coordinate[0] / 0.0005),
+    Math.floor(coordinate[1] / 0.0003),
+  ];
+}
+
+function endpointKey(x, y) {
+  return `${x}:${y}`;
+}
+
+function buildEndpointIndex(routes) {
+  const grid = new Map();
+  for (let routeIndex = 0; routeIndex < routes.length; routeIndex += 1) {
+    const route = routes[routeIndex];
+    const endpoints = [route.path[0], route.path[route.path.length - 1]];
+    for (let endIndex = 0; endIndex < endpoints.length; endIndex += 1) {
+      const coordinate = endpoints[endIndex];
+      const [cellX, cellY] = endpointCell(coordinate);
+      const key = endpointKey(cellX, cellY);
+      const entries = grid.get(key) ?? [];
+      entries.push({ coordinate, endIndex, routeIndex });
+      grid.set(key, entries);
+    }
+  }
+  return grid;
+}
+
+function nearbyEndpoints(coordinate, endpointIndex) {
+  const [cellX, cellY] = endpointCell(coordinate);
+  const result = [];
+  for (let xOffset = -1; xOffset <= 1; xOffset += 1) {
+    for (let yOffset = -1; yOffset <= 1; yOffset += 1) {
+      const entries = endpointIndex.get(endpointKey(cellX + xOffset, cellY + yOffset));
+      if (entries) result.push(...entries);
+    }
+  }
+  return result;
+}
+
+function vectorAlignment(incomingStart, junction, outgoingEnd) {
+  const incomingX = junction[0] - incomingStart[0];
+  const incomingY = junction[1] - incomingStart[1];
+  const outgoingX = outgoingEnd[0] - junction[0];
+  const outgoingY = outgoingEnd[1] - junction[1];
+  const incomingLength = Math.hypot(incomingX, incomingY);
+  const outgoingLength = Math.hypot(outgoingX, outgoingY);
+  if (incomingLength === 0 || outgoingLength === 0) return 0;
+  return (
+    (incomingX * outgoingX + incomingY * outgoingY) /
+    (incomingLength * outgoingLength)
+  );
+}
+
+function chooseWeightedRoute(routes, random) {
+  let totalWeight = 0;
+  for (const route of routes) {
+    totalWeight += Math.sqrt(route.lengthMeters) * route.weight;
+  }
+  let target = random() * totalWeight;
+  for (let index = 0; index < routes.length; index += 1) {
+    target -= Math.sqrt(routes[index].lengthMeters) * routes[index].weight;
+    if (target <= 0) return index;
+  }
+  return routes.length - 1;
+}
+
+function orientPath(route, reverse) {
+  return reverse ? [...route.path].reverse() : route.path;
+}
+
+function buildJourneyTemplates(routes) {
+  const endpointIndex = buildEndpointIndex(routes);
+  const journeys = [];
+  const signatures = new Set();
+
+  for (
+    let attempt = 0;
+    journeys.length < JOURNEY_TEMPLATE_COUNT && attempt < JOURNEY_TEMPLATE_COUNT * 40;
+    attempt += 1
+  ) {
+    const random = createRandom(hashInteger(`journey:${attempt}`));
+    const startRouteIndex = chooseWeightedRoute(routes, random);
+    const startRoute = routes[startRouteIndex];
+    const routeIndexes = [startRouteIndex];
+    const usedRoutes = new Set(routeIndexes);
+    const path = [...orientPath(startRoute, random() > 0.5)];
+    let journeyLength = startRoute.lengthMeters;
+    let demandTotal = startRoute.weight * startRoute.lengthMeters;
+    const targetLength = 1_800 + random() * 5_200;
+
+    while (
+      journeyLength < targetLength &&
+      routeIndexes.length < MAX_JOURNEY_SEGMENTS
+    ) {
+      const junction = path[path.length - 1];
+      const incomingStart = path[Math.max(0, path.length - 2)];
+      const candidates = [];
+      for (const endpoint of nearbyEndpoints(junction, endpointIndex)) {
+        if (usedRoutes.has(endpoint.routeIndex)) continue;
+        const gap = distanceMeters(junction, endpoint.coordinate);
+        if (gap > CONNECTION_RADIUS_METERS) continue;
+        const candidateRoute = routes[endpoint.routeIndex];
+        const candidatePath = orientPath(candidateRoute, endpoint.endIndex === 1);
+        if (candidatePath.length < 2) continue;
+        const alignment = vectorAlignment(incomingStart, junction, candidatePath[1]);
+        if (alignment < -0.72) continue;
+        candidates.push({
+          alignment,
+          candidatePath,
+          gap,
+          route: candidateRoute,
+          routeIndex: endpoint.routeIndex,
+          score: candidateRoute.weight * 0.62 + (alignment + 1) * 0.22 + random() * 0.16,
+        });
+      }
+      if (candidates.length === 0) break;
+      candidates.sort((a, b) => b.score - a.score || a.gap - b.gap);
+      const selected = candidates[0];
+      const previousEnd = path[path.length - 1];
+      const nextStart = selected.candidatePath[0];
+      if (previousEnd[0] !== nextStart[0] || previousEnd[1] !== nextStart[1]) {
+        path.push(nextStart);
+        journeyLength += selected.gap;
+      }
+      path.push(...selected.candidatePath.slice(1));
+      journeyLength += selected.route.lengthMeters;
+      demandTotal += selected.route.weight * selected.route.lengthMeters;
+      routeIndexes.push(selected.routeIndex);
+      usedRoutes.add(selected.routeIndex);
+    }
+
+    if (journeyLength < MIN_JOURNEY_METERS) continue;
+    const signature = routeIndexes.join(":");
+    if (signatures.has(signature)) continue;
+    signatures.add(signature);
+    journeys.push({
+      demandWeight: Number((demandTotal / journeyLength).toFixed(3)),
+      lengthMeters: Number(journeyLength.toFixed(1)),
+      path: cleanPath(path),
+    });
+  }
+
+  if (journeys.length < JOURNEY_TEMPLATE_COUNT) {
+    throw new Error(
+      `Only generated ${journeys.length} connected journey templates; expected ${JOURNEY_TEMPLATE_COUNT}.`,
+    );
+  }
+  return journeys;
 }
 
 function buildHourlyProfile() {
@@ -199,13 +419,24 @@ async function main() {
     }
   }
 
+  const hourlyProfile = buildHourlyProfile();
+  const journeys = buildJourneyTemplates(routes);
+  const {
+    hourlyJourneyCounts,
+    modeledDailyJourneys,
+    observedDaytimeCrossings,
+  } = buildHourlyJourneyCounts(hourlyProfile);
+
   const output = {
     metadata: {
       generatedAt: new Date().toISOString(),
       routeCount: routes.length,
+      journeyTemplateCount: journeys.length,
+      modeledDailyJourneys,
+      observedDaytimeCrossings,
       recentCountLocations: counts.length,
       modelDescription:
-        "Existing bicycle infrastructure weighted by the latest 2023–25 municipal bicycle AADT nearby. Daytime rhythm blends June 2025 Sunday observations with a broader 2014 summer-Sunday profile; the older profile supplies unobserved night hours. Particles are illustrative flow, not recorded trajectories.",
+        "Count-preserving synthetic journeys on connected existing bicycle infrastructure. Route demand is weighted by the latest 2023–25 municipal bicycle AADT nearby. The exact modeled daily total is calibrated to 12,127 aggregate crossings observed from 07:00–19:00 at four locations on 22 June 2025, with a broader 2014 summer-Sunday profile supplying unobserved hours. Journeys are plausible modeled paths, not recorded trajectories or unique real cyclists.",
       sources: {
         network: CYCLE_NETWORK_URL,
         trafficCounts: TRAFFIC_COUNTS_URL,
@@ -213,7 +444,8 @@ async function main() {
         overnightShape: "Copenhagen fixed bicycle counters, summer Sundays 2014",
       },
     },
-    hourlyProfile: buildHourlyProfile(),
+    hourlyProfile,
+    hourlyJourneyCounts,
     // Tuple schema: [category index, length in meters, relative weight,
     // delta-encoded coordinates in millionths of a degree]. This keeps the
     // public artifact small without hiding or changing the model.
@@ -222,6 +454,15 @@ async function main() {
       route.lengthMeters,
       route.weight,
       packPath(route.path),
+    ]),
+    // Tuple schema: [length in meters, relative demand weight,
+    // delta-encoded coordinates]. Each template is a connected synthetic path
+    // assembled from nearby official network segments. Individual journeys are
+    // deterministically scheduled in the browser from hourlyJourneyCounts.
+    journeys: journeys.map((journey) => [
+      journey.lengthMeters,
+      journey.demandWeight,
+      packPath(journey.path),
     ]),
   };
 
@@ -234,7 +475,7 @@ async function main() {
     "utf8",
   );
   console.log(
-    `Wrote ${routes.length.toLocaleString("en")} routes calibrated from ${counts.length.toLocaleString("en")} recent count locations.`,
+    `Wrote ${routes.length.toLocaleString("en")} routes, ${journeys.length.toLocaleString("en")} connected journey templates, and ${modeledDailyJourneys.toLocaleString("en")} count-equivalent modeled journeys calibrated from ${counts.length.toLocaleString("en")} recent count locations.`,
   );
 }
 

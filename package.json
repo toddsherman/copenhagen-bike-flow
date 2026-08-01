@@ -4,11 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node scripts/verify-data.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "generate:data": "node scripts/build-data.mjs && node scripts/build-water.mjs",
-    "generate:water": "node scripts/build-water.mjs"
+    "generate:water": "node scripts/build-water.mjs",
+    "verify:data": "node scripts/verify-data.mjs"
   },
   "dependencies": {
     "@deck.gl/core": "9.3.7",

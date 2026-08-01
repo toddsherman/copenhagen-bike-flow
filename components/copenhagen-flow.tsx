@@ -29,27 +29,52 @@ type PackedRoute = [
 type FlowDataFile = {
   metadata: {
     generatedAt: string;
+    journeyTemplateCount: number;
+    modeledDailyJourneys: number;
+    observedDaytimeCrossings: number;
     routeCount: number;
     recentCountLocations: number;
     modelDescription: string;
   };
   hourlyProfile: number[];
+  hourlyJourneyCounts: number[];
+  journeys: PackedJourney[];
   routes: PackedRoute[];
 };
 
-type FlowData = Omit<FlowDataFile, "routes"> & { routes: FlowRoute[] };
+type PackedJourney = [
+  lengthMeters: number,
+  demandWeight: number,
+  coordinateDeltas: number[],
+];
+
+type FlowJourney = {
+  id: string;
+  path: Coordinate[];
+  lengthMeters: number;
+  demandWeight: number;
+};
+
+type FlowData = Omit<FlowDataFile, "journeys" | "routes"> & {
+  journeys: FlowJourney[];
+  routes: FlowRoute[];
+};
 
 type HydratedRoute = FlowRoute & {
   cumulative: number[];
 };
 
-type ParticleSeed = {
-  route: HydratedRoute;
-  phase: number;
-  activation: number;
-  speed: number;
+type HydratedJourney = FlowJourney & {
+  cumulative: number[];
+};
+
+type SyntheticTrip = {
+  id: number;
+  journey: HydratedJourney;
   reverse: boolean;
   size: number;
+  speedMetersPerSecond: number;
+  startSeconds: number;
 };
 
 type RenderParticle = {
@@ -100,24 +125,37 @@ const PACKED_CATEGORIES: FlowRoute["category"][] = [
   "Supercykelsti",
 ];
 
+function unpackPath(deltas: number[]): Coordinate[] {
+  const path: Coordinate[] = [];
+  let longitude = 0;
+  let latitude = 0;
+  for (let index = 0; index < deltas.length; index += 2) {
+    longitude += deltas[index];
+    latitude += deltas[index + 1];
+    path.push([longitude / 1_000_000, latitude / 1_000_000]);
+  }
+  return path;
+}
+
 function unpackRoutes(routes: PackedRoute[]): FlowRoute[] {
   return routes.map(([categoryIndex, lengthMeters, weight, deltas], routeIndex) => {
-    const path: Coordinate[] = [];
-    let longitude = 0;
-    let latitude = 0;
-    for (let index = 0; index < deltas.length; index += 2) {
-      longitude += deltas[index];
-      latitude += deltas[index + 1];
-      path.push([longitude / 1_000_000, latitude / 1_000_000]);
-    }
     return {
       id: String(routeIndex),
       category: PACKED_CATEGORIES[categoryIndex],
       lengthMeters,
       weight,
-      path,
+      path: unpackPath(deltas),
     };
   });
+}
+
+function unpackJourneys(journeys: PackedJourney[]): FlowJourney[] {
+  return journeys.map(([lengthMeters, demandWeight, deltas], journeyIndex) => ({
+    id: String(journeyIndex),
+    demandWeight,
+    lengthMeters,
+    path: unpackPath(deltas),
+  }));
 }
 
 function distanceMeters(a: Coordinate, b: Coordinate) {
@@ -127,7 +165,7 @@ function distanceMeters(a: Coordinate, b: Coordinate) {
   return Math.hypot(x, y);
 }
 
-function hydrateRoute(route: FlowRoute): HydratedRoute {
+function hydratePath<T extends FlowRoute | FlowJourney>(route: T): T & { cumulative: number[] } {
   const cumulative = [0];
   for (let index = 1; index < route.path.length; index += 1) {
     cumulative.push(
@@ -137,7 +175,10 @@ function hydrateRoute(route: FlowRoute): HydratedRoute {
   return { ...route, cumulative };
 }
 
-function interpolatePosition(route: HydratedRoute, rawProgress: number): Coordinate {
+function interpolatePosition(
+  route: { path: Coordinate[]; cumulative: number[] },
+  rawProgress: number,
+): Coordinate {
   const progress = Math.max(0, Math.min(0.999999, rawProgress));
   const target = progress * route.cumulative[route.cumulative.length - 1];
   let low = 1;
@@ -178,20 +219,23 @@ function formatClock(simulatedSeconds: number) {
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
-function activityAt(profile: number[], simulatedSeconds: number) {
-  const hour = simulatedSeconds / 3600;
-  const index = Math.floor(hour) % 24;
-  const next = (index + 1) % 24;
-  const fraction = hour - Math.floor(hour);
-  return profile[index] + (profile[next] - profile[index]) * fraction;
-}
-
 function daylightAt(simulatedSeconds: number) {
   const hour = simulatedSeconds / 3600;
   if (hour < 4.5 || hour > 22) return 0;
   if (hour < 7) return (hour - 4.5) / 2.5;
   if (hour > 19.5) return (22 - hour) / 2.5;
   return 1;
+}
+
+function weightedIndex(cumulativeWeights: number[], target: number) {
+  let low = 0;
+  let high = cumulativeWeights.length - 1;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (cumulativeWeights[middle] < target) low = middle + 1;
+    else high = middle;
+  }
+  return low;
 }
 
 function PlayIcon({ playing }: { playing: boolean }) {
@@ -242,7 +286,11 @@ export default function CopenhagenFlow() {
         ]);
       })
       .then(([data, water]) => {
-        setFlowData({ ...data, routes: unpackRoutes(data.routes) });
+        setFlowData({
+          ...data,
+          journeys: unpackJourneys(data.journeys),
+          routes: unpackRoutes(data.routes),
+        });
         setWaterPolygons(water.features);
       })
       .catch((error: unknown) => {
@@ -273,39 +321,50 @@ export default function CopenhagenFlow() {
   }, [playing]);
 
   const routes = useMemo(
-    () => flowData?.routes.map(hydrateRoute) ?? [],
+    () => flowData?.routes.map(hydratePath) ?? [],
     [flowData],
   );
 
-  const seeds = useMemo<ParticleSeed[]>(() => {
-    const result: ParticleSeed[] = [];
-    for (const route of routes) {
-      const count = Math.max(
-        1,
-        Math.min(
-          6,
-          Math.round((route.lengthMeters / 175) * (0.34 + route.weight * 0.9)),
-        ),
-      );
+  const journeys = useMemo(
+    () => flowData?.journeys.map(hydratePath) ?? [],
+    [flowData],
+  );
+
+  const trips = useMemo<SyntheticTrip[]>(() => {
+    if (!flowData || journeys.length === 0) return [];
+    const cumulativeWeights: number[] = [];
+    let totalWeight = 0;
+    for (const journey of journeys) {
+      totalWeight += journey.demandWeight;
+      cumulativeWeights.push(totalWeight);
+    }
+
+    const result: SyntheticTrip[] = [];
+    let tripId = 0;
+    for (let hour = 0; hour < flowData.hourlyJourneyCounts.length; hour += 1) {
+      const count = flowData.hourlyJourneyCounts[hour];
       for (let index = 0; index < count; index += 1) {
-        const key = `${route.id}:${index}`;
+        const key = `trip:${tripId}`;
+        const startFraction = (index + hashUnit(`${key}:start`)) / count;
+        const journeyIndex = weightedIndex(
+          cumulativeWeights,
+          hashUnit(`${key}:journey`) * totalWeight,
+        );
         result.push({
-          route,
-          phase: hashUnit(`${key}:phase`),
-          activation: hashUnit(`${key}:active`),
-          speed: 0.045 + hashUnit(`${key}:speed`) * 0.095,
+          id: tripId,
+          journey: journeys[journeyIndex],
           reverse: hashUnit(`${key}:direction`) > 0.5,
-          size: 1 + hashUnit(`${key}:size`) * 0.85,
+          size: 1 + hashUnit(`${key}:size`) * 0.7,
+          speedMetersPerSecond: 3.8 + hashUnit(`${key}:speed`) * 1.4,
+          startSeconds: hour * 3600 + startFraction * 3600,
         });
+        tripId += 1;
       }
     }
     return result;
-  }, [routes]);
+  }, [flowData, journeys]);
 
   const simulatedSeconds = (elapsedMs / LOOP_MS) * DAY_SECONDS;
-  const activity = flowData
-    ? activityAt(flowData.hourlyProfile, simulatedSeconds)
-    : 0;
   const daylight = daylightAt(simulatedSeconds);
 
   const { particles, trails } = useMemo<{
@@ -313,27 +372,29 @@ export default function CopenhagenFlow() {
     trails: RenderTrail[];
   }>(() => {
     if (!flowData) return { particles: [], trails: [] };
-    const elapsedSeconds = elapsedMs / 1000;
-    const visibleThreshold = 0.025 + activity * 0.22;
     const particleResult: RenderParticle[] = [];
     const trailResult: RenderTrail[] = [];
 
-    for (const seed of seeds) {
-      if (seed.activation > visibleThreshold) continue;
-      let progress = (seed.phase + elapsedSeconds * seed.speed) % 1;
-      if (seed.reverse) progress = 1 - progress;
-      const alpha = 0.72 + activity * 0.28;
-      const size = seed.size * (0.92 + seed.route.weight * 0.16);
+    for (const trip of trips) {
+      const ageSeconds =
+        (simulatedSeconds - trip.startSeconds + DAY_SECONDS) % DAY_SECONDS;
+      const pathLength = trip.journey.cumulative[trip.journey.cumulative.length - 1];
+      const durationSeconds = pathLength / trip.speedMetersPerSecond;
+      if (ageSeconds > durationSeconds) continue;
+      const journeyProgress = ageSeconds / durationSeconds;
+      const progress = trip.reverse ? 1 - journeyProgress : journeyProgress;
+      const alpha = 0.82 + trip.journey.demandWeight * 0.14;
       particleResult.push({
-        position: interpolatePosition(seed.route, progress),
+        position: interpolatePosition(trip.journey, progress),
         alpha,
-        size,
+        size: trip.size,
       });
 
-      const direction = seed.reverse ? -1 : 1;
+      const direction = trip.reverse ? -1 : 1;
       const trailSpan = Math.min(
-        0.45,
-        (145 + seed.route.weight * 55) / Math.max(1, seed.route.lengthMeters),
+        0.16,
+        (105 + trip.journey.demandWeight * 45) /
+          Math.max(1, pathLength),
       );
       for (let index = 0; index < TRAIL_SEGMENTS; index += 1) {
         const nearOffset = (index / TRAIL_SEGMENTS) * trailSpan;
@@ -351,16 +412,16 @@ export default function CopenhagenFlow() {
         const fade = Math.pow(1 - index / TRAIL_SEGMENTS, 1.65);
         trailResult.push({
           path: [
-            interpolatePosition(seed.route, farProgress),
-            interpolatePosition(seed.route, nearProgress),
+            interpolatePosition(trip.journey, farProgress),
+            interpolatePosition(trip.journey, nearProgress),
           ],
           alpha: alpha * fade,
-          width: Math.max(0.68, size * (0.96 - index * 0.1)),
+          width: Math.max(0.68, trip.size * (0.96 - index * 0.1)),
         });
       }
     }
     return { particles: particleResult, trails: trailResult };
-  }, [activity, elapsedMs, flowData, seeds]);
+  }, [flowData, simulatedSeconds, trips]);
 
   const layers = useMemo(
     () => [
@@ -463,6 +524,12 @@ export default function CopenhagenFlow() {
         <span>Sunday</span>
         <span>25°C</span>
         <span>Partly sunny</span>
+        {flowData ? (
+          <span>
+            {flowData.metadata.modeledDailyJourneys.toLocaleString("en")} count-equivalent
+            journeys
+          </span>
+        ) : null}
       </aside>
 
       <section className="playback" aria-label="Playback controls">
@@ -499,7 +566,7 @@ export default function CopenhagenFlow() {
       </section>
 
       <footer className="source-note">
-        Modeled, not tracked trips · Copenhagen municipal data 2014–25
+        Count-constrained journeys · modeled, not tracked · municipal data 2014–25
       </footer>
       <div className="map-attribution">
         <a href="https://openfreemap.org">OpenFreeMap</a>

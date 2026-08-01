@@ -3,7 +3,7 @@ import "./globals.css";
 
 const title = "Copenhagen Bike Flow — A Summer Sunday in 60 Seconds";
 const description =
-  "A modeled day of bicycle traffic across Copenhagen, compressed into a one-minute loop.";
+  "Count-constrained synthetic bicycle journeys across Copenhagen, compressed into a one-minute loop.";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://todd.sh"),
