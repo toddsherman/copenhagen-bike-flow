@@ -1,0 +1,33 @@
+{
+  "name": "copenhagen-bike-flow",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "generate:data": "node scripts/build-data.mjs"
+  },
+  "dependencies": {
+    "@deck.gl/core": "9.3.7",
+    "@deck.gl/layers": "9.3.7",
+    "@deck.gl/react": "9.3.7",
+    "maplibre-gl": "6.1.0",
+    "next": "16.2.12",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-map-gl": "8.1.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.2.12",
+    "typescript": "5.9.3"
+  },
+  "engines": {
+    "node": ">=20.9.0"
+  }
+}
