@@ -112,10 +112,10 @@ const VIEW_STATE = {
 };
 
 const NETWORK_COLORS: Record<FlowRoute["category"], [number, number, number, number]> = {
-  Cykelsti: [46, 77, 79, 165],
-  Cykelmulighed: [68, 97, 92, 115],
-  Grøn: [51, 105, 79, 135],
-  Supercykelsti: [14, 70, 82, 190],
+  Cykelsti: [46, 77, 79, 145],
+  Cykelmulighed: [68, 97, 92, 100],
+  Grøn: [51, 105, 79, 120],
+  Supercykelsti: [14, 70, 82, 165],
 };
 
 const PACKED_CATEGORIES: FlowRoute["category"][] = [
@@ -399,8 +399,8 @@ export default function CopenhagenFlow() {
 
       const direction = trip.reverse ? -1 : 1;
       const trailSpan = Math.min(
-        0.16,
-        (105 + trip.journey.demandWeight * 45) /
+        0.18,
+        (145 + trip.journey.demandWeight * 55) /
           Math.max(1, pathLength),
       );
       for (let index = 0; index < TRAIL_SEGMENTS; index += 1) {
@@ -423,7 +423,7 @@ export default function CopenhagenFlow() {
             interpolatePosition(trip.journey, nearProgress),
           ],
           alpha: alpha * fade,
-          width: Math.max(0.68, trip.size * (0.96 - index * 0.1)),
+          width: Math.max(0.82, trip.size * (1.1 - index * 0.095)),
         });
       }
     }
@@ -461,8 +461,8 @@ export default function CopenhagenFlow() {
         getColor: (trail) => [221, 73, 39, Math.round(245 * trail.alpha)],
         getWidth: (trail) => trail.width,
         widthUnits: "pixels",
-        widthMinPixels: 0.7,
-        widthMaxPixels: 2.4,
+        widthMinPixels: 0.85,
+        widthMaxPixels: 2.8,
         capRounded: true,
         jointRounded: true,
         pickable: false,
@@ -471,13 +471,13 @@ export default function CopenhagenFlow() {
         id: "bicycles",
         data: particles,
         getPosition: (particle) => particle.position,
-        getRadius: (particle) => particle.size * 0.92,
+        getRadius: (particle) => particle.size * 1.1,
         radiusUnits: "pixels",
-        radiusMinPixels: 0.95,
-        getFillColor: (particle) => [255, 240, 198, Math.round(248 * particle.alpha)],
+        radiusMinPixels: 1.2,
+        getFillColor: (particle) => [237, 77, 18, Math.round(252 * particle.alpha)],
         stroked: true,
-        getLineColor: (particle) => [221, 73, 39, Math.round(240 * particle.alpha)],
-        getLineWidth: 0.8,
+        getLineColor: (particle) => [255, 240, 198, Math.round(248 * particle.alpha)],
+        getLineWidth: 0.65,
         lineWidthUnits: "pixels",
         lineWidthMinPixels: 0.45,
         pickable: false,
