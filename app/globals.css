@@ -5,12 +5,12 @@
   --cream: #f5e4bd;
   --yellow: #ffc73d;
   --orange: #ed4d12;
-  --turquoise: #0d3440;
-  --map-land: #07191f;
-  --map-water: #0d3440;
-  --road: #4c676f;
-  --bike: #ffcd90;
-  --trail: #eb5839;
+  --turquoise: #49b9c7;
+  --map-land: #e4d2a7;
+  --map-water: #3db5c2;
+  --road: #2e4d4f;
+  --bike: #fff0c6;
+  --trail: #dd4927;
 }
 
 *,
@@ -167,8 +167,9 @@ button {
 
 .eyebrow {
   margin: 0 0 9px 4px;
-  color: var(--cream);
+  color: var(--navy);
   font-size: clamp(9px, 0.9vw, 12px);
+  text-shadow: 0 1px 0 rgba(245, 228, 189, 0.92);
 }
 
 .masthead h1,
@@ -188,10 +189,12 @@ button {
 
 .dek {
   margin: clamp(14px, 2vw, 26px) 0 0 5px;
-  color: var(--cream);
+  color: var(--navy);
   font-size: clamp(9px, 1vw, 13px);
   line-height: 1.45;
-  text-shadow: 0 1px 8px rgba(7, 40, 59, 0.8);
+  text-shadow:
+    0 1px 0 rgba(245, 228, 189, 0.92),
+    0 0 8px rgba(245, 228, 189, 0.72);
 }
 
 .weather-note {
@@ -203,10 +206,12 @@ button {
   flex-direction: column;
   align-items: flex-end;
   gap: 5px;
-  color: rgba(245, 228, 189, 0.86);
+  color: rgba(7, 40, 59, 0.9);
   font-size: 10px;
   line-height: 1;
-  text-shadow: 0 1px 5px rgba(0, 0, 0, 0.72);
+  text-shadow:
+    0 1px 0 rgba(245, 228, 189, 0.94),
+    0 0 6px rgba(245, 228, 189, 0.72);
 }
 
 .playback {
@@ -251,12 +256,21 @@ button {
 }
 
 .clock {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
   min-width: 70px;
   font-family: "Arial Narrow", Arial, sans-serif;
   font-size: 23px;
   font-variant-numeric: tabular-nums;
   font-weight: 900;
   letter-spacing: 0.04em;
+}
+
+.clock__period {
+  color: rgba(245, 228, 189, 0.72);
+  font-size: 9px;
+  letter-spacing: 0.1em;
 }
 
 .replay {
@@ -287,11 +301,14 @@ button {
 .day-cycle__labels {
   position: relative;
   width: 100%;
-  height: 23px;
-  color: rgba(245, 228, 189, 0.72);
+  height: 17px;
+  color: rgba(7, 40, 59, 0.76);
   font-size: 7px;
   font-weight: 800;
   letter-spacing: 0.1em;
+  text-shadow:
+    0 1px 0 rgba(245, 228, 189, 0.92),
+    0 0 5px rgba(245, 228, 189, 0.72);
   text-transform: uppercase;
 }
 
@@ -304,34 +321,25 @@ button {
 
 .day-cycle__midnight-start {
   left: 0;
-  top: 11px !important;
+  top: 0 !important;
   transform: none !important;
-}
-
-.day-cycle__sunrise {
-  left: 18.75%;
 }
 
 .day-cycle__noon {
   left: 50%;
-  top: 11px !important;
-}
-
-.day-cycle__sunset {
-  left: 91.67%;
-  transform: translateX(-100%) !important;
+  top: 0 !important;
 }
 
 .day-cycle__midnight-end {
   right: 0;
-  top: 11px !important;
+  top: 0 !important;
   transform: none !important;
 }
 
 .day-cycle__bar {
   position: relative;
   height: 9px;
-  border: 1px solid rgba(245, 228, 189, 0.38);
+  border: 1px solid rgba(7, 40, 59, 0.48);
   border-radius: 999px;
   background: linear-gradient(
     90deg,
@@ -380,10 +388,12 @@ button {
   bottom: clamp(26px, 3.6vw, 45px);
   left: clamp(20px, 3vw, 48px);
   max-width: min(290px, calc(100vw - 370px));
-  color: rgba(245, 228, 189, 0.86);
+  color: rgba(7, 40, 59, 0.9);
   font-size: 8px;
   line-height: 1.45;
-  text-shadow: 0 1px 5px var(--navy);
+  text-shadow:
+    0 1px 0 rgba(245, 228, 189, 0.95),
+    0 0 5px rgba(245, 228, 189, 0.8);
 }
 
 .source-note__truth {
@@ -766,8 +776,8 @@ button {
     left: 18px;
     display: grid;
     align-items: center;
-    border-top: 1px solid rgba(245, 228, 189, 0.34);
-    border-bottom: 1px solid rgba(245, 228, 189, 0.34);
+    border-top: 1px solid rgba(7, 40, 59, 0.3);
+    border-bottom: 1px solid rgba(7, 40, 59, 0.3);
     padding: 9px 0 8px;
     grid-template-columns: auto auto minmax(0, 1fr);
     font-size: 7px;
@@ -799,10 +809,10 @@ button {
 
   .weather-note__journeys {
     margin-top: 7px;
-    border-top: 1px solid rgba(245, 228, 189, 0.18);
+    border-top: 1px solid rgba(7, 40, 59, 0.16);
     padding-top: 7px;
     grid-column: 1 / -1;
-    color: var(--cream);
+    color: var(--navy);
     font-size: 7.5px;
     letter-spacing: 0.13em;
   }
@@ -826,8 +836,12 @@ button {
   }
 
   .clock {
-    min-width: 59px;
+    min-width: 82px;
     font-size: 20px;
+  }
+
+  .clock__period {
+    font-size: 8px;
   }
 
   .day-cycle {
@@ -840,7 +854,7 @@ button {
   }
 
   .day-cycle__labels {
-    height: 24px;
+    height: 17px;
     font-size: 6.5px;
     letter-spacing: 0.08em;
   }
@@ -879,9 +893,9 @@ button {
     padding: 0;
     border-radius: 0;
     background: transparent;
-    color: rgba(245, 228, 189, 0.54);
+    color: rgba(7, 40, 59, 0.64);
     font-size: 7px;
-    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.88);
+    text-shadow: 0 1px 0 rgba(245, 228, 189, 0.82);
   }
 
   .methodology__panel {

@@ -112,10 +112,10 @@ const VIEW_STATE = {
 };
 
 const NETWORK_COLORS: Record<FlowRoute["category"], [number, number, number, number]> = {
-  Cykelsti: [76, 103, 111, 112],
-  Cykelmulighed: [55, 79, 87, 78],
-  Grøn: [52, 105, 92, 98],
-  Supercykelsti: [111, 129, 132, 142],
+  Cykelsti: [46, 77, 79, 165],
+  Cykelmulighed: [68, 97, 92, 115],
+  Grøn: [51, 105, 79, 135],
+  Supercykelsti: [14, 70, 82, 190],
 };
 
 const PACKED_CATEGORIES: FlowRoute["category"][] = [
@@ -216,7 +216,11 @@ function hashUnit(value: string) {
 function formatClock(simulatedSeconds: number) {
   const hour = Math.floor(simulatedSeconds / 3600) % 24;
   const minute = Math.floor((simulatedSeconds % 3600) / 60);
-  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+  return {
+    dateTime: `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
+    display: `${hour % 12 || 12}:${String(minute).padStart(2, "0")}`,
+    period: hour < 12 ? "AM" : "PM",
+  };
 }
 
 function daylightAt(simulatedSeconds: number) {
@@ -368,6 +372,7 @@ export default function CopenhagenFlow() {
 
   const simulatedSeconds = (elapsedMs / LOOP_MS) * DAY_SECONDS;
   const daylight = daylightAt(simulatedSeconds);
+  const clock = formatClock(simulatedSeconds);
 
   const { particles, trails } = useMemo<{
     particles: RenderParticle[];
@@ -431,7 +436,7 @@ export default function CopenhagenFlow() {
         id: "water",
         data: waterPolygons,
         getPolygon: (feature) => feature.geometry.coordinates,
-        getFillColor: [13, 52, 64, 255],
+        getFillColor: [61, 181, 194, 255],
         filled: true,
         stroked: false,
         pickable: false,
@@ -453,7 +458,7 @@ export default function CopenhagenFlow() {
         id: "bicycle-trails",
         data: trails,
         getPath: (trail) => trail.path,
-        getColor: (trail) => [235, 88, 57, Math.round(245 * trail.alpha)],
+        getColor: (trail) => [221, 73, 39, Math.round(245 * trail.alpha)],
         getWidth: (trail) => trail.width,
         widthUnits: "pixels",
         widthMinPixels: 0.7,
@@ -469,10 +474,10 @@ export default function CopenhagenFlow() {
         getRadius: (particle) => particle.size * 0.92,
         radiusUnits: "pixels",
         radiusMinPixels: 0.95,
-        getFillColor: (particle) => [255, 205, 144, Math.round(248 * particle.alpha)],
+        getFillColor: (particle) => [255, 240, 198, Math.round(248 * particle.alpha)],
         stroked: true,
-        getLineColor: (particle) => [235, 88, 57, Math.round(235 * particle.alpha)],
-        getLineWidth: 0.65,
+        getLineColor: (particle) => [221, 73, 39, Math.round(240 * particle.alpha)],
+        getLineWidth: 0.8,
         lineWidthUnits: "pixels",
         lineWidthMinPixels: 0.45,
         pickable: false,
@@ -558,8 +563,9 @@ export default function CopenhagenFlow() {
         >
           <PlayIcon playing={playing} />
         </button>
-        <time className="clock" dateTime={`T${formatClock(simulatedSeconds)}`}>
-          {formatClock(simulatedSeconds)}
+        <time className="clock" dateTime={`T${clock.dateTime}`}>
+          <span>{clock.display}</span>
+          <span className="clock__period">{clock.period}</span>
         </time>
         <button className="replay" type="button" onClick={replay}>
           Replay day
@@ -569,9 +575,7 @@ export default function CopenhagenFlow() {
       <section className="day-cycle" aria-label="Daylight cycle from midnight to midnight">
         <div className="day-cycle__labels" aria-hidden="true">
           <span className="day-cycle__midnight-start">Midnight</span>
-          <span className="day-cycle__sunrise">Sunrise</span>
           <span className="day-cycle__noon">12 noon</span>
-          <span className="day-cycle__sunset">Sunset</span>
           <span className="day-cycle__midnight-end">Midnight</span>
         </div>
         <div className="day-cycle__bar" aria-hidden="true">
