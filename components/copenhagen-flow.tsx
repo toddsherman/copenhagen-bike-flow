@@ -112,10 +112,10 @@ const VIEW_STATE = {
 };
 
 const NETWORK_COLORS: Record<FlowRoute["category"], [number, number, number, number]> = {
-  Cykelsti: [46, 77, 79, 145],
-  Cykelmulighed: [68, 97, 92, 100],
-  Grøn: [51, 105, 79, 120],
-  Supercykelsti: [14, 70, 82, 165],
+  Cykelsti: [76, 103, 111, 110],
+  Cykelmulighed: [55, 79, 87, 72],
+  Grøn: [52, 105, 92, 92],
+  Supercykelsti: [111, 129, 132, 130],
 };
 
 const PACKED_CATEGORIES: FlowRoute["category"][] = [
@@ -436,7 +436,7 @@ export default function CopenhagenFlow() {
         id: "water",
         data: waterPolygons,
         getPolygon: (feature) => feature.geometry.coordinates,
-        getFillColor: [61, 181, 194, 255],
+        getFillColor: [13, 52, 64, 255],
         filled: true,
         stroked: false,
         pickable: false,
